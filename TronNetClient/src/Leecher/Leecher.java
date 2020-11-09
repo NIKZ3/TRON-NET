@@ -35,6 +35,8 @@ public class Leecher implements Runnable {
     // TODO: disconnect upon succesful recepetion of all files
     // TODO: thread pools for seeders
     // TODO: Handle seeder disconnection
+    // TODO:- Add check wherein if pending pieces have become zero we end the
+    // TODO:- connection i.e. interrupt the thread
     // ! Synchronized blocks might create issue for other loops using same variables
     // !in loop
 
@@ -149,6 +151,8 @@ public class Leecher implements Runnable {
                     Thread.sleep(500);
                     distributionIndex = this.BalanceDistribution();
                 }
+                // TODO:- Add check wherein if pending pieces have become zero we end the
+                // TODO:- connection i.e. interrupt the thread
                 this.sendDistributionMessage(distributionIndex, seedOutputStream);
 
                 // ! Notifies seed disconnect;
