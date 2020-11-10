@@ -57,6 +57,9 @@ public class Encode {
             }
 
             String merkleRoot = createMerkleRoot();
+            String renamePath = Paths.get(fragmentPath, this.fileName).toString();
+            File rename = Paths.get(renamePath, merkleRoot).toFile();
+            fragmentWorkdir.renameTo(rename);
             metaDataHash.put("merkleRoot", merkleRoot);
             metaDataHash.put("fileName", this.fileName);
             metaDataHash.put("fileSize", Float.toString(this.fileSize));

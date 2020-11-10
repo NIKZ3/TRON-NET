@@ -3,7 +3,7 @@ package Communication.p2p;
 import Communication.Request.Request;
 import Communication.p2p.*;
 
-public class disconnect implements Request {
+public class disconnect implements p2p {
 
     /**
      *
@@ -17,9 +17,8 @@ public class disconnect implements Request {
     }
 
     @Override
-    public String getRequestType() {
+    public String getMsgType() {
         return this.msgType;
-
     }
 
 }

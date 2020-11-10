@@ -37,6 +37,9 @@ public class Leecher implements Runnable {
     // TODO: Handle seeder disconnection
     // TODO:- Add check wherein if pending pieces have become zero we end the
     // TODO:- connection i.e. interrupt the thread
+    // TODO:- Add file name to leechRequest
+
+    // TODO:- After creation of file fragments replace name by merkleroot
     // ! Synchronized blocks might create issue for other loops using same variables
     // !in loop
 
@@ -117,42 +120,59 @@ public class Leecher implements Runnable {
                 new Thread() {
                     public void run() {
                         extractSeed(socket);
+                        System.out.println("Seed Extraction Complete");
+                        try {
+                            if (pendingPiecesCount == 0) {
+                                serverSocket.close();
+                            }
+                        } catch (Exception e) {
+                            System.out.println("Seeding complete Closed");
+                        }
+                        return;
                     }
                 }.start();
 
             }
-
-            this.disconnectSeeders();
-            serverSocket.close();
+            /*
+             * System.out.println("Out of listen seeder"); this.disconnectSeeders();
+             * System.out.println("Closing Leecher"); serverSocket.close();
+             */
 
         } catch (Exception e) {
-            System.out.println("ServerSocketCreation Failed");
-            e.printStackTrace();
+            System.out.println("ServerSocket Closed");
+
+            // e.printStackTrace();
+            return;
+
         }
 
-        try {
-            Thread.currentThread().join();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        return;
 
     }
 
     public void extractSeed(Socket socket) {
         Integer distributionIndex = -1;
         try {
-            while (this.pendingPiecesCount != 0) {
-                ObjectInputStream seedInputStream = new ObjectInputStream(socket.getInputStream());
-                ObjectOutputStream seedOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream seedInputStream = new ObjectInputStream(socket.getInputStream());
+            ObjectOutputStream seedOutputStream = new ObjectOutputStream(socket.getOutputStream());
 
+            while (this.pendingPiecesCount != 0) {
                 distributionIndex = this.BalanceDistribution();
                 while (distributionIndex == -1) {
 
                     Thread.sleep(500);
+                    if (this.pendingPiecesCount == 0) {
+                        break;
+                    }
                     distributionIndex = this.BalanceDistribution();
                 }
-                // TODO:- Add check wherein if pending pieces have become zero we end the
-                // TODO:- connection i.e. interrupt the thread
+
+                if (this.pendingPiecesCount == 0) {
+                    System.out.println("closing Streams");
+                    seedInputStream.close();
+                    seedOutputStream.close();
+                    break;
+                }
                 this.sendDistributionMessage(distributionIndex, seedOutputStream);
 
                 // ! Notifies seed disconnect;
@@ -167,9 +187,11 @@ public class Leecher implements Runnable {
 
                     seeders.remove(socket);
                     System.out.println("SEEDER DISCONNECTED");
+                    this.reintroduceIndex(distributionIndex);
                     break;
                 }
             }
+
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("seeder Disconnected");
             this.seeders.remove(socket);
@@ -179,17 +201,15 @@ public class Leecher implements Runnable {
             e.printStackTrace();
         }
 
-        try {
-            Thread.currentThread().join();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        System.out.println("OUT");
+        return;
 
     }
 
     public void sendDistributionMessage(Integer distributionIndex, ObjectOutputStream seedOutputStream) {
 
         try {
+            System.out.println("Distribution message:---" + distributionIndex);
             String contentHash = pendingPieces.get(distributionIndex);
             distributionMessage dmg = new distributionMessage(distributionIndex, contentHash);
             seedOutputStream.writeObject(dmg);
@@ -200,35 +220,39 @@ public class Leecher implements Runnable {
 
     }
 
-    public Integer BalanceDistribution() {
+    public synchronized Integer BalanceDistribution() {
 
         // !SHARED VARIABLE
-        synchronized (this) {
-            if (assignmentIndexes.size() != 0) {
-                Integer ind = assignmentIndexes.get(0);
-                assignmentIndexes.remove(0);
 
-                return ind;
-            }
+        if (assignmentIndexes.size() != 0) {
+            Integer ind = assignmentIndexes.get(0);
+            assignmentIndexes.remove(0);
 
-            else
-                return -1;
+            return ind;
         }
+
+        else
+            return -1;
     }
 
-    public void reintroduceIndex(Integer distributionIndex) {
+    public synchronized void reintroduceIndex(Integer distributionIndex) {
 
         // !SHARED VARIABLE
-        synchronized (this) {
-            assignmentIndexes.add(distributionIndex);
-        }
+
+        assignmentIndexes.add(distributionIndex);
 
     }
 
     public void writePieceToDisk(byte[] content, String contentHash, Integer distributionIndex) {
 
-        String basicPath = Paths.get(rootDirectory, "fragment").toString();
+        // !DIRECTORY NAME CHANGET TO FRAGMENTR
+        String basicPath = Paths.get(rootDirectory, "fragmentR").toString();
         String fragmentPath = Paths.get(basicPath, this.filename).toString();
+        File fragmentDir = Paths.get(basicPath, this.filename).toFile();
+
+        if (!fragmentDir.exists()) {
+            fragmentDir.mkdirs();
+        }
 
         try {
             File fragmentFile = Paths.get(fragmentPath, contentHash).toFile();
@@ -246,23 +270,30 @@ public class Leecher implements Runnable {
         }
     }
 
-    public void updatePendingPieces(Integer distributionIndex) {
+    public synchronized void updatePendingPieces(Integer distributionIndex) {
 
         // ! Synchronize block for shared variable
-        synchronized (this) {
-            this.pendingPieces.remove(distributionIndex);
-            this.pendingPiecesCount--;
-            System.out.println("UPATED PENDING PIECES:-" + distributionIndex);
+
+        this.pendingPieces.remove(distributionIndex);
+        this.pendingPiecesCount--;
+        System.out.println("UPATED PENDING PIECES:-" + distributionIndex);
+
+        if (this.pendingPiecesCount == 0) {
+            this.disconnectSeeders();
         }
+
     }
 
     public void disconnectSeeders() {
 
         for (Socket socket : this.seeders) {
             try {
-                ObjectOutputStream seedOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                disconnect disCon = new disconnect();
-                seedOutputStream.writeObject(disCon);
+                System.out.println("Disconnecting Seeders");
+                // ObjectOutputStream seedOutputStream = new
+                // ObjectOutputStream(socket.getOutputStream());
+                /*
+                 * disconnect disCon = new disconnect(); seedOutputStream.writeObject(disCon);
+                 */
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -272,14 +303,15 @@ public class Leecher implements Runnable {
     @Override
     public void run() {
 
-        connectToTracker();
-        leechRequest(this.merkleRoot);
+        // connectToTracker();
+        // leechRequest(this.merkleRoot);
         System.out.println("Connected to Tracker");
-        new Thread() {
-            public void run() {
-                listenToSeeders();
-            }
-        }.start();
+        listenToSeeders();
+        System.out.println("Finallt");
+        return;
+        /*
+         * new Thread() { public void run() { listenToSeeders(); } }.start();
+         */
     }
 
 }
