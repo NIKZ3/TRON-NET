@@ -1,4 +1,4 @@
-package Communication.Request;
+package Request;
 
 public class leechRequest implements Request {
 

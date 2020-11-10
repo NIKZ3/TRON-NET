@@ -47,7 +47,8 @@ public class Leecher implements Runnable {
 
         this.ipAddress = "localhost";
         this.portNo = 3000;
-
+        this.trackerPort = 8080;
+        this.trackerIp = "localhost";
         this.rootDirectory = rootDirectory;
         this.filename = filename;
         this.metaDataFileName = metaDataFileName;
@@ -99,7 +100,7 @@ public class Leecher implements Runnable {
     }
 
     public void leechRequest(String merkleRoot) {
-        leechRequest leechReq = new leechRequest(this.merkleRoot, this.ipAddress, this.portNo);
+        leechRequest leechReq = new leechRequest(this.merkleRoot, this.ipAddress, this.filename, this.portNo);
         try {
             trackerOutputStream.writeObject(leechReq);
         } catch (IOException e) {
@@ -303,8 +304,8 @@ public class Leecher implements Runnable {
     @Override
     public void run() {
 
-        // connectToTracker();
-        // leechRequest(this.merkleRoot);
+        connectToTracker();
+        leechRequest(this.merkleRoot);
         System.out.println("Connected to Tracker");
         listenToSeeders();
         System.out.println("Finallt");

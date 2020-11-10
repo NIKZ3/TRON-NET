@@ -24,7 +24,7 @@ public class Seeder implements Runnable {
     private Integer portNo = null;
     private String rootDirectory = null;
     private Socket trackerSocket = null;
-    private ObjectOutputStream trackeOutputStream = null;
+    private ObjectOutputStream trackerOutputStream = null;
     private ObjectInputStream trackerInputStream = null;
     private HashMap<String, String> availableFiles = new HashMap<String, String>();
 
@@ -32,32 +32,59 @@ public class Seeder implements Runnable {
         this.rootDirectory = rootDirectory;
         this.ipAddress = "localhost";
         this.portNo = 3001;
+        this.trackerIp = "localhost";
+        this.trackerPort = 8080;
     }
 
     public void connectToTracker() {
         try {
             Socket socket = new Socket(this.trackerIp, this.trackerPort);
             this.trackerSocket = socket;
-            this.trackeOutputStream = new ObjectOutputStream(socket.getOutputStream());
-            this.trackerInputStream = new ObjectInputStream(socket.getInputStream());
-        } catch (IOException e) {
+            System.out.println("1");
+
+            System.out.println("2");
+
+            System.out.println("3");
+            this.createSeedRequest();
+            System.out.println("YOOO");
+        } catch (Exception e) {
             System.out.println("Connection with tracker Failed");
+            e.printStackTrace();
+        }
+    }
+
+    public void createSeedRequest() {
+        try {
+            this.trackerOutputStream = new ObjectOutputStream(this.trackerSocket.getOutputStream());
+            seedRequest seedR = new seedRequest();
+            trackerOutputStream.writeObject(seedR);
+            System.out.println("SEEDER ANNOUNCED");
+            this.listenToTracker();
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void listenToTracker() {
 
+        System.out.println("Waiting for seed requests");
         try {
+
+            this.trackerInputStream = new ObjectInputStream(this.trackerSocket.getInputStream());
             while (true) {
 
                 System.out.println("Waiting for seed requests");
                 serverSeedMsg serverMsg = (serverSeedMsg) trackerInputStream.readObject();
                 String merkleRoot = serverMsg.getMerkleRoot();
-                if (availableFiles.containsKey(merkleRoot)) {
-                    System.out.println("Merkle present seeding Initiated");
-                    this.seedFile(serverMsg);
-                }
+                String fileName = serverMsg.getFileName();
+                this.seedFile(serverMsg);
+                // TODO:-File checks in directory and populate map to check if file exists
+                /*
+                 * if (availableFiles.containsKey(merkleRoot)) {
+                 * System.out.println("Merkle present seeding Initiated");
+                 * this.seedFile(serverMsg); }
+                 */
             }
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Tracker not online");
@@ -138,9 +165,12 @@ public class Seeder implements Runnable {
     @Override
     public void run() {
 
-        serverSeedMsg serverMsg = new serverSeedMsg("111", "localhost", 3000, "xyz.mp3");
-        seedFile(serverMsg);
-        // connectToTracker();
+        // serverSeedMsg serverMsg = new serverSeedMsg("111", "localhost", 3000,
+        // "xyz.mp3");
+        // seedFile(serverMsg);
+        System.out.println("YOO");
+        connectToTracker();
+        System.out.println("YOO");
 
     }
 
