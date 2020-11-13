@@ -1,6 +1,8 @@
 package Leecher;
 
+import java.nio.channels.Pipe.SinkChannel;
 import java.nio.file.Paths;
+import java.util.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map.Entry;
@@ -8,11 +10,13 @@ import java.io.*;
 import java.net.*;
 import Communication.Request.*;
 import Communication.p2p.*;
+import com.google.common.hash.*;
+import Encoding.*;
 
 public class Leecher implements Runnable {
 
     private String merkleRoot = null;
-    private HashMap<String, String> metaDataHash = new HashMap<String, String>();
+    private LinkedHashMap<String, String> metaDataHash = new LinkedHashMap<String, String>();
     private String rootDirectory = null;
     private String trackerIp = null;
     private Integer trackerPort = null;
@@ -25,23 +29,15 @@ public class Leecher implements Runnable {
     private Integer portNo = null;
     private long pendingPiecesCount = 0;
     private Float fileSize = 0.0f;
-    private HashMap<Integer, String> pendingPieces = new HashMap<Integer, String>();
+    private LinkedHashMap<Integer, String> pendingPieces = new LinkedHashMap<Integer, String>();
     private ArrayList<Integer> pendingIndexes = new ArrayList<Integer>();
     private ArrayList<Integer> assignmentIndexes = new ArrayList<Integer>();
 
     private Integer fileIndex = 0;
 
-    // TODO: Using synchronise block for indexes
-    // TODO: disconnect upon succesful recepetion of all files
     // TODO: thread pools for seeders
-    // TODO: Handle seeder disconnection
-    // TODO:- Add check wherein if pending pieces have become zero we end the
-    // TODO:- connection i.e. interrupt the thread
-    // TODO:- Add file name to leechRequest
 
     // TODO:- After creation of file fragments replace name by merkleroot
-    // ! Synchronized blocks might create issue for other loops using same variables
-    // !in loop
 
     public Leecher(String rootDirectory, String filename, String metaDataFileName) {
 
@@ -59,7 +55,7 @@ public class Leecher implements Runnable {
 
         try {
             ObjectInputStream metaFileReader = new ObjectInputStream(new FileInputStream(metaFile));
-            this.metaDataHash = (HashMap<String, String>) metaFileReader.readObject();
+            this.metaDataHash = (LinkedHashMap<String, String>) metaFileReader.readObject();
             metaFileReader.close();
         } catch (Exception e) {
             System.out.println("MetaFile Read Error");
@@ -169,7 +165,7 @@ public class Leecher implements Runnable {
                 }
 
                 if (this.pendingPiecesCount == 0) {
-                    System.out.println("closing Streams");
+
                     seedInputStream.close();
                     seedOutputStream.close();
                     break;
@@ -181,7 +177,8 @@ public class Leecher implements Runnable {
                 if (msg.getMsgType().equals("SEED")) {
                     seedData data = (seedData) msg;
                     byte[] pieceContent = data.getContent();
-                    String contentHash = data.getContentHash();
+                    // String contentHash = data.getContentHash();
+                    String contentHash = pendingPieces.get(data.getDistributionIndex());
 
                     this.writePieceToDisk(pieceContent, contentHash, distributionIndex);
                 } else if (msg.getMsgType().equals("DISCONNECT")) {
@@ -202,7 +199,6 @@ public class Leecher implements Runnable {
             e.printStackTrace();
         }
 
-        System.out.println("OUT");
         return;
 
     }
@@ -247,27 +243,38 @@ public class Leecher implements Runnable {
     public void writePieceToDisk(byte[] content, String contentHash, Integer distributionIndex) {
 
         // !DIRECTORY NAME CHANGET TO FRAGMENTR
-        String basicPath = Paths.get(rootDirectory, "fragmentR").toString();
-        String fragmentPath = Paths.get(basicPath, this.filename).toString();
-        File fragmentDir = Paths.get(basicPath, this.filename).toFile();
 
-        if (!fragmentDir.exists()) {
-            fragmentDir.mkdirs();
+        String hash = Hashing.sha256().hashBytes(content).toString();
+
+        if (hash.equals(pendingPieces.get(distributionIndex))) {
+            String basicPath = Paths.get(rootDirectory, "fragment").toString();
+            String fragmentPath = Paths.get(basicPath, this.filename).toString();
+            File fragmentDir = Paths.get(basicPath, this.filename).toFile();
+
+            if (!fragmentDir.exists()) {
+                fragmentDir.mkdirs();
+            }
+
+            try {
+                File fragmentFile = Paths.get(fragmentPath, contentHash).toFile();
+                fragmentFile.createNewFile();
+                FileOutputStream fragmentFileWriter = new FileOutputStream(fragmentFile);
+                fragmentFileWriter.write(content);
+                fragmentFileWriter.close();
+
+                this.updatePendingPieces(distributionIndex);
+            } catch (Exception e) {
+                System.out.print("Fragment Write Failed:-");
+                System.out.println(contentHash);
+                e.printStackTrace();
+
+            }
         }
 
-        try {
-            File fragmentFile = Paths.get(fragmentPath, contentHash).toFile();
-            fragmentFile.createNewFile();
-            FileOutputStream fragmentFileWriter = new FileOutputStream(fragmentFile);
-            fragmentFileWriter.write(content);
-            fragmentFileWriter.close();
+        else {
 
-            this.updatePendingPieces(distributionIndex);
-        } catch (Exception e) {
-            System.out.print("Fragment Write Failed:-");
-            System.out.println(contentHash);
-            e.printStackTrace();
-
+            System.out.println("Corrupt Fragment:- " + hash);
+            this.reintroduceIndex(distributionIndex);
         }
     }
 
@@ -295,10 +302,30 @@ public class Leecher implements Runnable {
                 /*
                  * disconnect disCon = new disconnect(); seedOutputStream.writeObject(disCon);
                  */
+                socket.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    public void finalMerge() {
+        Decode decode = new Decode(this.rootDirectory, this.filename, this.metaDataHash, this.merkleRoot);
+        decode.merge();
+    }
+
+    public long getPendingPiecesCount() {
+        return this.pendingPiecesCount;
+    }
+
+    public int getProgress() {
+
+        int original = this.metaDataHash.size();
+        int pending = (int) this.pendingPiecesCount;
+
+        int completion = (pending / original) * 100;
+        return (100 - completion);
+
     }
 
     @Override
@@ -308,7 +335,7 @@ public class Leecher implements Runnable {
         leechRequest(this.merkleRoot);
         System.out.println("Connected to Tracker");
         listenToSeeders();
-        System.out.println("Finallt");
+
         return;
         /*
          * new Thread() { public void run() { listenToSeeders(); } }.start();

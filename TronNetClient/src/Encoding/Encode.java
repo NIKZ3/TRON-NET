@@ -7,12 +7,15 @@ import com.google.common.hash.*;
 import java.nio.*;
 import java.nio.file.Paths;
 import java.io.*;
+import java.util.*;
 import java.util.Map.Entry;
+
 import java.nio.charset.StandardCharsets;
 
 public class Encode {
 
-    private HashMap<String, String> metaDataHash = new HashMap<String, String>();
+    // private HashMap<String, String> metaDataHash = new HashMap<String, String>();
+    private LinkedHashMap<String, String> metaDataHash = new LinkedHashMap<String, String>();
     private String rootDirectory = null, fileName = null;
     private File file = null;
     private float fileSize = 0;

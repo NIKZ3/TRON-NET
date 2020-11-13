@@ -9,12 +9,10 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import Communication.Request.*;
 import Communication.p2p.*;
-
-//TODO:- Check directory and add merkles in map
-//TODO:- Connect to tracker and then listen to tracker once seed request made start seeding
 
 public class Seeder implements Runnable {
 
@@ -26,7 +24,7 @@ public class Seeder implements Runnable {
     private Socket trackerSocket = null;
     private ObjectOutputStream trackerOutputStream = null;
     private ObjectInputStream trackerInputStream = null;
-    private HashMap<String, String> availableFiles = new HashMap<String, String>();
+    private ArrayList<String> existingFiles = new ArrayList<String>();
 
     public Seeder(String rootDirectory) {
         this.rootDirectory = rootDirectory;
@@ -40,13 +38,8 @@ public class Seeder implements Runnable {
         try {
             Socket socket = new Socket(this.trackerIp, this.trackerPort);
             this.trackerSocket = socket;
-            System.out.println("1");
-
-            System.out.println("2");
-
-            System.out.println("3");
             this.createSeedRequest();
-            System.out.println("YOOO");
+            System.out.println("After create seed request");
         } catch (Exception e) {
             System.out.println("Connection with tracker Failed");
             e.printStackTrace();
@@ -78,13 +71,11 @@ public class Seeder implements Runnable {
                 serverSeedMsg serverMsg = (serverSeedMsg) trackerInputStream.readObject();
                 String merkleRoot = serverMsg.getMerkleRoot();
                 String fileName = serverMsg.getFileName();
-                this.seedFile(serverMsg);
-                // TODO:-File checks in directory and populate map to check if file exists
-                /*
-                 * if (availableFiles.containsKey(merkleRoot)) {
-                 * System.out.println("Merkle present seeding Initiated");
-                 * this.seedFile(serverMsg); }
-                 */
+                if (existingFiles.contains(fileName)) {
+                    System.out.println("File Available Starting seed");
+                    this.seedFile(serverMsg);
+                }
+
             }
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Tracker not online");
@@ -120,15 +111,6 @@ public class Seeder implements Runnable {
                 }
             }
 
-            /*
-             * String filePathBasic = Paths.get(this.rootDirectory, "fragments").toString();
-             * String filePath = Paths.get(filePathBasic,
-             * serverMsg.getFileName()).toString(); File seedFile = Paths.get(filePath,
-             * serverMsg.getMerkleRoot()).toFile(); FileInputStream seedFileInputStream =
-             * new FileInputStream(seedFile); byte[] pieceContent = new byte[(int)
-             * seedFile.length()]; seedFileInputStream.read(pieceContent);
-             */
-
         } catch (Exception e) {
             System.out.println("Leecher is offline");
             e.printStackTrace();
@@ -152,14 +134,25 @@ public class Seeder implements Runnable {
             FileInputStream contentFileInputStream = new FileInputStream(contentFile);
 
             contentFileInputStream.read(content);
-            seedData data = new seedData(content, distributionIndex, contentHash);
+            seedData data = new seedData(content, distributionIndex);
             leechOutputStream.writeObject(data);
-
+            contentFileInputStream.close();
         } catch (IOException e) {
             System.out.println(contentHash + "+-----------------" + "Corrupt or leecher offline");
             e.printStackTrace();
         }
 
+    }
+
+    public void checkAvailableFiles() {
+
+        File file = Paths.get(this.rootDirectory, "files").toFile();
+
+        File[] listOfFiles = file.listFiles();
+
+        for (File f : listOfFiles) {
+            existingFiles.add(f.getName());
+        }
     }
 
     @Override
@@ -168,9 +161,10 @@ public class Seeder implements Runnable {
         // serverSeedMsg serverMsg = new serverSeedMsg("111", "localhost", 3000,
         // "xyz.mp3");
         // seedFile(serverMsg);
-        System.out.println("YOO");
+        System.out.println("Before Tracker");
+        checkAvailableFiles();
         connectToTracker();
-        System.out.println("YOO");
+        System.out.println("After Tracker");
 
     }
 

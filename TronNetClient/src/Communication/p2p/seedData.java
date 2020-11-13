@@ -11,22 +11,22 @@ public class seedData implements p2p {
     private static final long serialVersionUID = 1L;
     private String messageType = "SEED";
     private byte[] content = null;
-    private String contentHash = null;
+    // private String contentHash = null;
     private Integer distributionIndex = 0;
 
-    public seedData(byte[] content, Integer distributionIndex, String contentHash) {
+    public seedData(byte[] content, Integer distributionIndex) {
         this.content = content;
         this.distributionIndex = distributionIndex;
-        this.contentHash = contentHash;
+        // this.contentHash = contentHash;
     }
 
     public Integer getDistributionIndex() {
         return this.distributionIndex;
     }
 
-    public String getContentHash() {
-        return this.contentHash;
-    }
+    /*
+     * public String getContentHash() { return this.contentHash; }
+     */
 
     public seedData(byte[] content) {
         this.content = content;
